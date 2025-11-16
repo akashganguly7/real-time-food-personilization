@@ -341,6 +341,28 @@ def get_ai_response(user_message, conversation_history, user_email=None):
             return f"❌ Connection error: Could not connect to AWS Bedrock.\n\nPlease verify:\n- Your internet connection\n- AWS service status\n- Region 'eu-west-1' is correct\n\nError: {error_msg}"
         return f"❌ Error: {error_msg}"
 
+# Custom CSS to increase page width
+st.markdown("""
+<style>
+    /* Increase overall page width */
+    .main .block-container {
+        max-width: 95% !important;
+        padding-left: 5rem !important;
+        padding-right: 5rem !important;
+    }
+    
+    /* Make columns wider */
+    section[data-testid="stSidebar"] {
+        display: none;
+    }
+    
+    /* Ensure full width utilization */
+    .stApp {
+        max-width: 100% !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 st.title("Food Recipe Recommender")
 
 st.write("Answer a few questions to get personalized recipe recommendations")
@@ -348,57 +370,206 @@ st.write("Answer a few questions to get personalized recipe recommendations")
 # API Configuration
 API_BASE_URL ="http://localhost:8080"
 
-#question 0: email and it can't be empty
-# Initialize email in session state
-if 'user_email' not in st.session_state:
-    st.session_state.user_email = ""
+# Initialize session state for chat
+if 'chat_open' not in st.session_state:
+    st.session_state.chat_open = False
+if 'chat_messages' not in st.session_state:
+    st.session_state.chat_messages = []
 
-email = st.text_input("What is your email address?", value=st.session_state.user_email)
-if email == "" or '@' not in email:
-    st.error("Email is required")
-    st.stop()
-else:
-    # Store email in session state
-    st.session_state.user_email = email
+# Create two columns: left for preferences, right for chatbot
+pref_col, chat_col = st.columns([1, 1.5])
 
-# Question 1: Diet Type
-diet_type = st.selectbox("What diet type do you prefer?", ["Vegetarian", "Vegan", "Non-Vegetarian", "Keto", "Paleo", "Gluten-Free", "Dairy-Free"])
+with pref_col:
+    st.markdown("### 📝 Your Preferences")
+    
+    #question 0: email and it can't be empty
+    # Initialize email in session state
+    if 'user_email' not in st.session_state:
+        st.session_state.user_email = ""
 
-# Question 2: Allergies
-allergies = st.multiselect("Do you have any allergies?", ["Gluten", "Dairy", "Eggs", "Soy", "Nuts", "Seafood"], default=None)
+    email = st.text_input("What is your email address?", value=st.session_state.user_email)
+    if email == "" or '@' not in email:
+        st.error("Email is required")
+        st.stop()
+    else:
+        # Store email in session state
+        st.session_state.user_email = email
 
-# Question 3: Budget
-budget = st.selectbox("What is your budget for a meal?", [10, 20, 25, 50], index=1)
+    # Question 1: Diet Type
+    diet_type = st.selectbox("What diet type do you prefer?", ["Vegetarian", "Vegan", "Non-Vegetarian", "Keto", "Paleo", "Gluten-Free", "Dairy-Free"])
 
-# Question 4: Cuisine
-cuisine = st.selectbox("What is your preferred cuisine?", ["Italian", "Mexican", "Japanese", "Indian", "American", "Vietnamese", "No Preference"])
+    # Question 2: Allergies
+    allergies = st.multiselect("Do you have any allergies?", ["Gluten", "Dairy", "Eggs", "Soy", "Nuts", "Seafood"], default=None)
 
+    # Question 3: Budget
+    budget = st.selectbox("What is your budget for a meal?", [10, 20, 25, 50], index=1)
 
-#On submit, call GO POST API
-if st.button("Submit Preferences"):
-    try:
-        # Prepare request payload
-        payload = {
-            "email": email,
-            "diet_type": diet_type,
-            "allergies": allergies,
-            "budget": budget,
-            "cuisine": cuisine,
-            "loaded_at": datetime.now().isoformat()
+    # Question 4: Cuisine
+    cuisine = st.selectbox("What is your preferred cuisine?", ["Italian", "Mexican", "Japanese", "Indian", "American", "Vietnamese", "No Preference"])
+
+    #On submit, call GO POST API
+    if st.button("Submit Preferences"):
+        try:
+            # Prepare request payload
+            payload = {
+                "email": email,
+                "diet_type": diet_type,
+                "allergies": allergies,
+                "budget": budget,
+                "cuisine": cuisine,
+                "loaded_at": datetime.now().isoformat()
+            }
+            # Make API call to Golang microservice
+            api_url = f"{API_BASE_URL}/api/preferences"
+            with st.spinner("Submitting preferences to microservice..."):
+                response = requests.post(api_url, json=payload, timeout=10)
+                response.raise_for_status()
+                st.success("Preferences submitted successfully")
+        except requests.exceptions.RequestException as e:
+            st.error(f"Error submitting preferences: {str(e)}")
+            st.info("Please check that the Golang microservice is running and the API URL is correct.")
+        except json.JSONDecodeError as e:
+            st.error(f"Error parsing API response: {str(e)}")
+        except Exception as e:
+            st.error(f"Unexpected error: {str(e)}")
+
+with chat_col:
+    st.markdown("### 🤖 Chat Assistant")
+    
+    # Chat interface CSS
+    st.markdown("""
+    <style>
+        /* Inline chat container - ChatGPT style */
+        .chat-container-inline {
+            width: 100%;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            min-height: 500px;
+            max-height: 600px;
         }
-        # Make API call to Golang microservice
-        api_url = f"{API_BASE_URL}/api/preferences"
-        with st.spinner("Submitting preferences to microservice..."):
-            response = requests.post(api_url, json=payload, timeout=10)
-            response.raise_for_status()
-            st.success("Preferences submitted successfully")
-    except requests.exceptions.RequestException as e:
-        st.error(f"Error submitting preferences: {str(e)}")
-        st.info("Please check that the Golang microservice is running and the API URL is correct.")
-    except json.JSONDecodeError as e:
-        st.error(f"Error parsing API response: {str(e)}")
-    except Exception as e:
-        st.error(f"Unexpected error: {str(e)}")
+        .chat-messages-inline {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background-color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .chat-messages-inline::-webkit-scrollbar {
+            width: 8px;
+        }
+        .chat-messages-inline::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        .chat-messages-inline::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        .chat-messages-inline::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        .chat-message-inline {
+            padding: 16px 20px;
+            border-radius: 8px;
+            word-wrap: break-word;
+            line-height: 1.6;
+            animation: fadeIn 0.3s ease-in;
+            max-width: 85%;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .chat-message-inline.user {
+            background-color: #1f77b4;
+            color: white;
+            margin-left: auto;
+            align-self: flex-end;
+        }
+        .chat-message-inline.bot {
+            background-color: #f0f2f6;
+            color: #262730;
+            margin-right: auto;
+            align-self: flex-start;
+        }
+        .chat-input-area-inline {
+            padding: 20px;
+            background-color: white;
+            border-top: 1px solid #e0e0e0;
+            border-radius: 0 0 10px 10px;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Build messages HTML
+    messages_html = ""
+    if st.session_state.chat_messages:
+        import html
+        for msg in st.session_state.chat_messages:
+            role = msg.get('role', 'bot')
+            content = html.escape(msg.get('content', ''))
+            messages_html += f'<div class="chat-message-inline {role}">{content}</div>'
+    else:
+        messages_html = '<div class="chat-message-inline bot">Hello! 👋 How can I help you with recipe recommendations today?</div>'
+    
+    # Render chat container with messages
+    st.markdown(f"""
+    <div class="chat-container-inline">
+        <div class="chat-messages-inline" id="chat-messages-inline-div">
+            {messages_html}
+        </div>
+    </div>
+    <script>
+        // Auto-scroll to bottom when messages are added
+        setTimeout(function() {{
+            const messagesDiv = document.getElementById('chat-messages-inline-div');
+            if (messagesDiv) {{
+                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            }}
+        }}, 100);
+    </script>
+    """, unsafe_allow_html=True)
+    
+    # Chat input form using Streamlit
+    with st.form(key="chat_form", clear_on_submit=True):
+        input_col1, input_col2 = st.columns([8, 2])
+        
+        with input_col1:
+            user_input = st.text_input(
+                "", 
+                key="chat_input", 
+                placeholder="Type your message here...", 
+                label_visibility="collapsed"
+            )
+        
+        with input_col2:
+            # Send button with icon - wider button
+            send_button = st.form_submit_button("➤ Send", use_container_width=True, type="primary", help="Send message")
+    
+    # Handle message sending
+    if send_button and user_input:
+        # Add user message
+        st.session_state.chat_messages.append({
+            'role': 'user',
+            'content': user_input
+        })
+        
+        # Get AI response from Bedrock (pass user email if available)
+        user_email = st.session_state.get('user_email', None)
+        with st.spinner("Thinking..."):
+            bot_response = get_ai_response(user_input, st.session_state.chat_messages, user_email=user_email)
+        
+        # Add bot response
+        st.session_state.chat_messages.append({
+            'role': 'bot',
+            'content': bot_response
+        })
+        st.rerun()
 
 # Initialize recipe database
 recipe_database = pd.DataFrame()
@@ -408,11 +579,6 @@ if 'page' not in st.session_state:
     st.session_state.page = 0
 if 'show_recipes' not in st.session_state:
     st.session_state.show_recipes = False
-# Initialize session state for chat
-if 'chat_open' not in st.session_state:
-    st.session_state.chat_open = False
-if 'chat_messages' not in st.session_state:
-    st.session_state.chat_messages = []
 
 # Recipes per page (3x3 grid = 9 recipes)
 recipes_per_page = 9
@@ -538,198 +704,3 @@ if st.session_state.show_recipes and not recipe_database.empty:
             if st.button("Next ▶", disabled=(st.session_state.page >= total_pages - 1)):
                 st.session_state.page += 1
                 st.rerun()
-
-# Chat interface CSS
-st.markdown("""
-<style>
-    /* Floating chat button */
-    .floating-chat-btn {
-        position: fixed !important;
-        bottom: 20px !important;
-        right: 20px !important;
-        width: 70px !important;
-        height: 70px !important;
-        border-radius: 50% !important;
-        background-color: #1f77b4 !important;
-        color: white !important;
-        border: none !important;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3) !important;
-        font-size: 32px !important;
-        z-index: 1000 !important;
-        cursor: pointer !important;
-        transition: all 0.3s ease !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-    }
-    .floating-chat-btn:hover {
-        background-color: #1565a0 !important;
-        transform: scale(1.1) !important;
-    }
-    /* Inline chat container - ChatGPT style */
-    .chat-container-inline {
-        width: 100%;
-        max-width: 900px;
-        margin: 20px auto;
-        background-color: white;
-        border-radius: 10px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        border: 1px solid #e0e0e0;
-        display: flex;
-        flex-direction: column;
-        min-height: 500px;
-        max-height: 700px;
-    }
-    .chat-messages-inline {
-        flex: 1;
-        overflow-y: auto;
-        padding: 20px;
-        background-color: #ffffff;
-        display: flex;
-        flex-direction: column;
-        gap: 20px;
-    }
-    .chat-messages-inline::-webkit-scrollbar {
-        width: 8px;
-    }
-    .chat-messages-inline::-webkit-scrollbar-track {
-        background: #f1f1f1;
-    }
-    .chat-messages-inline::-webkit-scrollbar-thumb {
-        background: #888;
-        border-radius: 4px;
-    }
-    .chat-messages-inline::-webkit-scrollbar-thumb:hover {
-        background: #555;
-    }
-    .chat-message-inline {
-        padding: 16px 20px;
-        border-radius: 8px;
-        word-wrap: break-word;
-        line-height: 1.6;
-        animation: fadeIn 0.3s ease-in;
-        max-width: 85%;
-    }
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    .chat-message-inline.user {
-        background-color: #1f77b4;
-        color: white;
-        margin-left: auto;
-        align-self: flex-end;
-    }
-    .chat-message-inline.bot {
-        background-color: #f0f2f6;
-        color: #262730;
-        margin-right: auto;
-        align-self: flex-start;
-    }
-    .chat-input-area-inline {
-        padding: 20px;
-        background-color: white;
-        border-top: 1px solid #e0e0e0;
-        border-radius: 0 0 10px 10px;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# Floating chat button
-col1, col2, col3 = st.columns([1, 1, 1])
-with col3:
-    if st.button("🤖", key="chat_toggle", help="Open/Close chat", use_container_width=False):
-        st.session_state.chat_open = not st.session_state.chat_open
-        st.rerun()
-
-# Style the chat button to be floating
-st.markdown("""
-<script>
-    function styleChatButton() {
-        const buttons = document.querySelectorAll('button[data-testid]');
-        buttons.forEach(btn => {
-            if (btn.textContent.trim() === '🤖') {
-                btn.classList.add('floating-chat-btn');
-            }
-        });
-    }
-    // Run on load and after a short delay to catch dynamically rendered buttons
-    window.addEventListener('load', styleChatButton);
-    setTimeout(styleChatButton, 100);
-    setTimeout(styleChatButton, 500);
-</script>
-""", unsafe_allow_html=True)
-
-# Render chat interface if open - ChatGPT style inline
-if st.session_state.chat_open:
-    st.markdown("---")
-    st.markdown("### 🤖 Chat Assistant")
-    
-    # Build messages HTML
-    messages_html = ""
-    if st.session_state.chat_messages:
-        import html
-        for msg in st.session_state.chat_messages:
-            role = msg.get('role', 'bot')
-            content = html.escape(msg.get('content', ''))
-            messages_html += f'<div class="chat-message-inline {role}">{content}</div>'
-    else:
-        messages_html = '<div class="chat-message-inline bot">Hello! 👋 How can I help you with recipe recommendations today?</div>'
-    
-    # Render chat container with messages
-    st.markdown(f"""
-    <div class="chat-container-inline">
-        <div class="chat-messages-inline" id="chat-messages-inline-div">
-            {messages_html}
-        </div>
-    </div>
-    <script>
-        // Auto-scroll to bottom when messages are added
-        setTimeout(function() {{
-            const messagesDiv = document.getElementById('chat-messages-inline-div');
-            if (messagesDiv) {{
-                messagesDiv.scrollTop = messagesDiv.scrollHeight;
-            }}
-        }}, 100);
-    </script>
-    """, unsafe_allow_html=True)
-    
-    # Chat input form using Streamlit
-    with st.form(key="chat_form", clear_on_submit=True):
-        input_col1, input_col2 = st.columns([5, 1])
-        
-        with input_col1:
-            user_input = st.text_input(
-                "", 
-                key="chat_input", 
-                placeholder="Type your message here...", 
-                label_visibility="collapsed"
-            )
-        
-        with input_col2:
-            send_button = st.form_submit_button("Send", use_container_width=True, type="primary")
-    
-    # Close button
-    if st.button("Close Chat", key="chat_close"):
-        st.session_state.chat_open = False
-        st.rerun()
-    
-    # Handle message sending
-    if send_button and user_input:
-        # Add user message
-        st.session_state.chat_messages.append({
-            'role': 'user',
-            'content': user_input
-        })
-        
-        # Get AI response from Bedrock (pass user email if available)
-        user_email = st.session_state.get('user_email', None)
-        with st.spinner("Thinking..."):
-            bot_response = get_ai_response(user_input, st.session_state.chat_messages, user_email=user_email)
-        
-        # Add bot response
-        st.session_state.chat_messages.append({
-            'role': 'bot',
-            'content': bot_response
-        })
-        st.rerun()
