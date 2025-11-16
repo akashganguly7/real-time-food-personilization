@@ -1,0 +1,7 @@
+streamlit
+pandas
+requests
+pyspark==3.0.3
+boto3
+python-dotenv
+pyyaml
