@@ -20,15 +20,15 @@ graph TB
     
     GoService -->|Load Initial Data| CSV[📄 recipe_database.csv]
     
-    style User fill:#e1f5ff
-    style Streamlit fill:#ffebee
-    style GoService fill:#e8f5e9
-    style Redis fill:#fff3e0
-    style Kafka fill:#f3e5f5
-    style Spark fill:#e0f2f1
-    style Bedrock fill:#fce4ec
-    style Parquet fill:#e1bee7
-    style CSV fill:#fff9c4
+    style User fill:#4A90E2,stroke:#2E5C8A,stroke-width:2px,color:#fff
+    style Streamlit fill:#FF6B6B,stroke:#C92A2A,stroke-width:2px,color:#fff
+    style GoService fill:#51CF66,stroke:#2F9E44,stroke-width:2px,color:#fff
+    style Redis fill:#FFA94D,stroke:#E67700,stroke-width:2px,color:#000
+    style Kafka fill:#9775FA,stroke:#5F3DC4,stroke-width:2px,color:#fff
+    style Spark fill:#20C997,stroke:#0CA678,stroke-width:2px,color:#fff
+    style Bedrock fill:#F783AC,stroke:#C2255C,stroke-width:2px,color:#fff
+    style Parquet fill:#DA77F2,stroke:#862E9C,stroke-width:2px,color:#fff
+    style CSV fill:#FFE066,stroke:#F59F00,stroke-width:2px,color:#000
 ```
 
 ## Data Flow
